@@ -1,30 +1,64 @@
+<<<<<<< Updated upstream
 import { useState } from 'react';
 import { motion, useMotionValue, useTransform, PanInfo, AnimatePresence } from 'motion/react';
+=======
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+>>>>>>> Stashed changes
 import { Calendar, Users, ChevronRight, Camera, X, CheckCircle2, ArrowLeft, Upload, FileText, CheckCheck, User, GraduationCap, Hash, Eye, EyeOff, Mail, Lock, Plus, QrCode, MapPin, Clock, Image, AlertCircle, TrendingDown } from 'lucide-react';
 
 type UserRole = 'student' | 'organizer' | null;
 
+interface UploadedEvent {
+  id: number;
+  title: string;
+  date: string;
+  location: string;
+  description: string;
+  attendees: number;
+}
+
+const PUBLISHED_EVENTS_KEY = 'UCEF_publishedEvents';
+
+function loadPublishedEvents(): UploadedEvent[] {
+  try {
+    const stored = localStorage.getItem(PUBLISHED_EVENTS_KEY);
+    if (!stored) return [];
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userRole, setUserRole] = useState<UserRole>(null);
-  const [currentScreen, setCurrentScreen] = useState(0);
-  const [direction, setDirection] = useState(0);
-  const screenWidth = 393;
+  const [publishedEvents, setPublishedEvents] = useState<UploadedEvent[]>([]);
 
   const handleLogin = (role: UserRole) => {
     setUserRole(role);
     setIsLoggedIn(true);
+<<<<<<< Updated upstream
     // Set initial screen based on role
     if (role === 'organizer') {
       setCurrentScreen(0); // Organizer starts at main screen
     } else {
       setCurrentScreen(1); // Student starts at dashboard (middle screen)
+=======
+    // persist current user
+    if (user) {
+      try { localStorage.setItem('UCEF_currentUser', JSON.stringify(user)); } catch {}
+    } else {
+      try { localStorage.setItem('UCEF_currentUser', JSON.stringify({ role })); } catch {}
+>>>>>>> Stashed changes
     }
   };
 
   const handleLogout = () => {
     setIsLoggedIn(false);
     setUserRole(null);
+<<<<<<< Updated upstream
     setCurrentScreen(0);
   };
 
@@ -76,28 +110,45 @@ export default function App() {
     setDirection(-1);
     setCurrentScreen(1);
   };
+=======
+    try { localStorage.removeItem('UCEF_currentUser'); } catch {}
+  };
+
+  useEffect(() => {
+    setPublishedEvents(loadPublishedEvents());
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PUBLISHED_EVENTS_KEY, JSON.stringify(publishedEvents));
+    } catch {}
+  }, [publishedEvents]);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('UCEF_currentUser');
+      if (stored) {
+        const user = JSON.parse(stored);
+        if (user && user.role) {
+          setUserRole(user.role);
+          setIsLoggedIn(true);
+        }
+      }
+    } catch {}
+  }, []);
+>>>>>>> Stashed changes
 
   if (!isLoggedIn) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-zinc-100 p-4">
-        <div
-          className="relative overflow-hidden bg-background shadow-2xl"
-          style={{
-            width: '393px',
-            height: '852px',
-            borderRadius: '60px',
-            border: '12px solid #1a1a1a'
-          }}
-        >
-          <AuthScreen onLogin={handleLogin} />
-        </div>
+      <div className="min-h-screen bg-background">
+        <AuthScreen onLogin={handleLogin} />
       </div>
     );
   }
 
-  // Render different UI based on role
   if (userRole === 'organizer') {
     return (
+<<<<<<< Updated upstream
       <div className="flex items-center justify-center min-h-screen bg-zinc-100 p-4">
         <div
           className="relative overflow-hidden bg-background shadow-2xl"
@@ -161,92 +212,21 @@ export default function App() {
             <div className={`h-1.5 rounded-full transition-all ${currentScreen === 1 ? 'w-8 bg-secondary' : 'w-1.5 bg-gray-300'}`} />
           </div>
         </div>
+=======
+      <div className="min-h-screen bg-background">
+        <OrganizerMainScreen
+          onLogout={handleLogout}
+          uploadedEvents={publishedEvents}
+          onPublishEvent={(event) => setPublishedEvents((prev) => [event, ...prev])}
+        />
+>>>>>>> Stashed changes
       </div>
     );
   }
 
-  // Student UI (existing)
   return (
-    <div className="flex items-center justify-center min-h-screen bg-zinc-100 p-4">
-      {/* iOS Device Frame */}
-      <div
-        className="relative overflow-hidden bg-background shadow-2xl"
-        style={{
-          width: '393px',
-          height: '852px',
-          borderRadius: '60px',
-          border: '12px solid #1a1a1a'
-        }}
-      >
-        {/* Dynamic Island */}
-        <div
-          className="absolute top-0 left-1/2 -translate-x-1/2 z-50 bg-black"
-          style={{
-            width: '126px',
-            height: '37px',
-            borderRadius: '0 0 20px 20px'
-          }}
-        />
-
-        {/* Screens Container */}
-        <div className="relative h-full w-full overflow-hidden">
-          <AnimatePresence initial={false} custom={direction}>
-            {currentScreen === 0 ? (
-              <motion.div
-                key="attended"
-                initial={{ x: direction === -1 ? -screenWidth : 0 }}
-                animate={{ x: 0 }}
-                exit={{ x: direction === 1 ? -screenWidth : 0 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                drag="x"
-                dragConstraints={{ left: 0, right: 0 }}
-                dragElastic={0.2}
-                onDragEnd={handleDragEnd}
-                className="absolute inset-0"
-              >
-                <AttendedEventsScreen />
-              </motion.div>
-            ) : currentScreen === 1 ? (
-              <motion.div
-                key="dashboard"
-                initial={{ x: direction === 1 ? screenWidth : direction === -1 ? -screenWidth : 0 }}
-                animate={{ x: 0 }}
-                exit={{ x: direction === 1 ? -screenWidth : direction === -1 ? screenWidth : 0 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                drag="x"
-                dragConstraints={{ left: 0, right: 0 }}
-                dragElastic={0.2}
-                onDragEnd={handleDragEnd}
-                className="absolute inset-0"
-              >
-                <DashboardScreen onCameraClick={navigateToCamera} onLogout={handleLogout} />
-              </motion.div>
-            ) : (
-              <motion.div
-                key="camera"
-                initial={{ x: direction === 1 ? screenWidth : 0 }}
-                animate={{ x: 0 }}
-                exit={{ x: direction === -1 ? screenWidth : 0 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                drag="x"
-                dragConstraints={{ left: 0, right: 0 }}
-                dragElastic={0.2}
-                onDragEnd={handleDragEnd}
-                className="absolute inset-0"
-              >
-                <CameraScreen onBack={navigateToDashboard} />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Screen Indicator Dots */}
-        <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-2 z-40">
-          <div className={`h-1.5 rounded-full transition-all ${currentScreen === 0 ? 'w-8 bg-primary' : 'w-1.5 bg-gray-300'}`} />
-          <div className={`h-1.5 rounded-full transition-all ${currentScreen === 1 ? 'w-8 bg-primary' : 'w-1.5 bg-gray-300'}`} />
-          <div className={`h-1.5 rounded-full transition-all ${currentScreen === 2 ? 'w-8 bg-primary' : 'w-1.5 bg-gray-300'}`} />
-        </div>
-      </div>
+    <div className="min-h-screen bg-background">
+      <DashboardScreen onLogout={handleLogout} publishedEvents={publishedEvents} />
     </div>
   );
 }
@@ -272,7 +252,7 @@ function AuthScreen({ onLogin }: AuthScreenProps) {
   };
 
   return (
-    <div className="h-full bg-background overflow-y-auto">
+    <div className="min-h-screen bg-background overflow-y-auto">
       <div className="px-6 pt-20 pb-8">
         {/* Logo/Title */}
         <div className="text-center mb-12">
@@ -655,11 +635,11 @@ function AttendedEventsScreen() {
 }
 
 interface DashboardScreenProps {
-  onCameraClick: () => void;
   onLogout: () => void;
+  publishedEvents: UploadedEvent[];
 }
 
-function DashboardScreen({ onCameraClick, onLogout }: DashboardScreenProps) {
+function DashboardScreen({ onLogout, publishedEvents }: DashboardScreenProps) {
   const currentHour = new Date().getHours();
   const greeting = currentHour < 12 ? 'Good morning' : currentHour < 18 ? 'Good afternoon' : 'Good evening';
   const [selectedEvent, setSelectedEvent] = useState<EventDetails | null>(null);
@@ -695,6 +675,20 @@ function DashboardScreen({ onCameraClick, onLogout }: DashboardScreenProps) {
       ]
     }
   ];
+
+  const publishedEventCards: EventDetails[] = publishedEvents.map((event) => ({
+    title: event.title,
+    description: event.description || `Event at ${event.location}`,
+    color: 'secondary',
+    icon: <Users className="w-10 h-10 text-secondary" strokeWidth={1.5} />,
+    requirements: [
+      `Date: ${event.date}`,
+      `Location: ${event.location}`,
+      'Check event details from organizer',
+    ],
+  }));
+
+  const allEvents = [...publishedEventCards, ...events];
 
   return (
     <div className="relative h-full bg-background overflow-y-auto">
@@ -747,9 +741,9 @@ function DashboardScreen({ onCameraClick, onLogout }: DashboardScreenProps) {
 
         {/* Floating Task Cards */}
         <div className="space-y-4">
-          {events.map((event) => (
+          {allEvents.map((event) => (
             <EventCard
-              key={event.title}
+              key={`${event.title}-${event.description}`}
               icon={event.icon}
               title={event.title}
               description={event.description}
@@ -790,30 +784,6 @@ function DashboardScreen({ onCameraClick, onLogout }: DashboardScreenProps) {
         onClose={() => setShowProfile(false)}
         onLogout={onLogout}
       />
-
-      {/* Floating Camera Button */}
-      <motion.button
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={onCameraClick}
-        className="absolute bottom-8 right-6 z-10"
-        style={{
-          width: '64px',
-          height: '64px'
-        }}
-      >
-        <div
-          className="absolute inset-0 rounded-full backdrop-blur-xl"
-          style={{
-            background: 'rgba(141, 212, 195, 0.9)',
-            border: '1px solid rgba(255, 255, 255, 0.4)',
-            boxShadow: '0 12px 40px rgba(141, 212, 195, 0.3)'
-          }}
-        />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <Camera className="w-7 h-7 text-white" strokeWidth={2} />
-        </div>
-      </motion.button>
     </div>
   );
 }
@@ -1546,27 +1516,13 @@ function ProfileModal({ isOpen, onClose, onLogout }: ProfileModalProps) {
 
 interface OrganizerMainScreenProps {
   onLogout: () => void;
+  uploadedEvents: UploadedEvent[];
+  onPublishEvent: (event: UploadedEvent) => void;
 }
 
-function OrganizerMainScreen({ onLogout }: OrganizerMainScreenProps) {
+function OrganizerMainScreen({ onLogout, uploadedEvents, onPublishEvent }: OrganizerMainScreenProps) {
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const [uploadedEvents, setUploadedEvents] = useState([
-    {
-      id: 1,
-      title: "Tech Career Fair 2026",
-      date: "March 15, 2026",
-      location: "Main Hall",
-      attendees: 45
-    },
-    {
-      id: 2,
-      title: "Startup Networking Event",
-      date: "April 10, 2026",
-      location: "Innovation Center",
-      attendees: 32
-    }
-  ]);
 
   return (
     <div className="relative h-full bg-background overflow-y-auto">
@@ -1659,55 +1615,61 @@ function OrganizerMainScreen({ onLogout }: OrganizerMainScreenProps) {
           </h2>
 
           <div className="space-y-3">
-            {uploadedEvents.map((event) => (
-              <motion.div
-                key={event.id}
-                whileHover={{ scale: 1.01, y: -2 }}
-                className="relative overflow-hidden"
-                style={{ borderRadius: '24px' }}
-              >
-                <div
-                  className="absolute inset-0 backdrop-blur-xl"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(255, 184, 148, 0.15) 0%, rgba(255, 184, 148, 0.05) 100%)',
-                    border: '1px solid rgba(255, 255, 255, 0.3)',
-                  }}
-                />
-
-                <div className="relative p-5">
-                  <h3
-                    className="text-lg mb-2"
+            {uploadedEvents.length === 0 ? (
+              <div className="p-5 rounded-2xl border border-dashed border-secondary/40 text-sm text-muted-foreground">
+                No published events yet. Upload your first event.
+              </div>
+            ) : (
+              uploadedEvents.map((event) => (
+                <motion.div
+                  key={event.id}
+                  whileHover={{ scale: 1.01, y: -2 }}
+                  className="relative overflow-hidden"
+                  style={{ borderRadius: '24px' }}
+                >
+                  <div
+                    className="absolute inset-0 backdrop-blur-xl"
                     style={{
-                      fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif',
-                      fontWeight: 600
+                      background: 'linear-gradient(135deg, rgba(255, 184, 148, 0.15) 0%, rgba(255, 184, 148, 0.05) 100%)',
+                      border: '1px solid rgba(255, 255, 255, 0.3)',
                     }}
-                  >
-                    {event.title}
-                  </h3>
+                  />
 
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Calendar className="w-4 h-4" strokeWidth={2} />
-                      <span style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif' }}>
-                        {event.date}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <MapPin className="w-4 h-4" strokeWidth={2} />
-                      <span style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif' }}>
-                        {event.location}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Users className="w-4 h-4" strokeWidth={2} />
-                      <span style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif' }}>
-                        {event.attendees} attendees
-                      </span>
+                  <div className="relative p-5">
+                    <h3
+                      className="text-lg mb-2"
+                      style={{
+                        fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif',
+                        fontWeight: 600
+                      }}
+                    >
+                      {event.title}
+                    </h3>
+
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Calendar className="w-4 h-4" strokeWidth={2} />
+                        <span style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif' }}>
+                          {event.date}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <MapPin className="w-4 h-4" strokeWidth={2} />
+                        <span style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif' }}>
+                          {event.location}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Users className="w-4 h-4" strokeWidth={2} />
+                        <span style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif' }}>
+                          {event.attendees} attendees
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              ))
+            )}
           </div>
         </div>
       </div>
@@ -1716,6 +1678,7 @@ function OrganizerMainScreen({ onLogout }: OrganizerMainScreenProps) {
       <UploadEventModal
         isOpen={showUploadForm}
         onClose={() => setShowUploadForm(false)}
+        onPublish={onPublishEvent}
       />
 
       {/* Profile Modal for Organizer */}
@@ -1731,9 +1694,10 @@ function OrganizerMainScreen({ onLogout }: OrganizerMainScreenProps) {
 interface UploadEventModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onPublish: (event: UploadedEvent) => void;
 }
 
-function UploadEventModal({ isOpen, onClose }: UploadEventModalProps) {
+function UploadEventModal({ isOpen, onClose, onPublish }: UploadEventModalProps) {
   const [formData, setFormData] = useState({
     title: '',
     date: '',
@@ -1836,7 +1800,21 @@ function UploadEventModal({ isOpen, onClose }: UploadEventModalProps) {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => {
-              // Handle upload
+              if (!formData.title.trim()) {
+                return;
+              }
+
+              const newEvent: UploadedEvent = {
+                id: Date.now(),
+                title: formData.title.trim(),
+                date: formData.date || 'TBA',
+                location: formData.location.trim() || 'TBA',
+                description: formData.description.trim(),
+                attendees: 0,
+              };
+
+              onPublish(newEvent);
+              setFormData({ title: '', date: '', location: '', description: '' });
               onClose();
             }}
             className="w-full py-4 rounded-2xl mt-8 text-white"
