@@ -30,6 +30,8 @@ type PublishedEvent = {
   }>;
 };
 
+type UploadedEvent = PublishedEvent;
+
 const USERS_KEY = 'UCEF_users';
 const CURRENT_USER_KEY = 'UCEF_currentUser';
 const EVENTS_KEY = 'UCEF_publishedEvents';
@@ -69,7 +71,16 @@ function loadPublishedEvents(): PublishedEvent[] {
   try {
     const raw = localStorage.getItem(EVENTS_KEY);
     const parsed = raw ? JSON.parse(raw) : null;
-    return Array.isArray(parsed) && parsed.length ? parsed : seedPublishedEvents;
+    if (!Array.isArray(parsed) || !parsed.length) return seedPublishedEvents;
+    return parsed.map((event: any) => ({
+      id: Number(event.id) || Date.now(),
+      title: event.title || 'Untitled Event',
+      date: event.date || 'TBA',
+      location: event.location || 'TBA',
+      description: event.description || '',
+      attendees: Number(event.attendees) || 0,
+      applicants: Array.isArray(event.applicants) ? event.applicants : []
+    }));
   } catch {
     return seedPublishedEvents;
   }
@@ -520,6 +531,411 @@ interface EventDetails {
   color: 'primary' | 'secondary';
   requirements: string[];
   icon: React.ReactNode;
+}
+
+interface StudentHomeScreenProps {
+  user: SavedUser | null;
+  screen: number;
+  onScreenChange: (screen: number) => void;
+  events: PublishedEvent[];
+  onLogout: () => void;
+}
+
+function StudentHomeScreen({ user, screen, onScreenChange, events, onLogout }: StudentHomeScreenProps) {
+  const [direction, setDirection] = useState(0);
+  const [selectedEvent, setSelectedEvent] = useState<EventDetails | null>(null);
+  const [showApplication, setShowApplication] = useState(false);
+  const [applicationEvent, setApplicationEvent] = useState<EventDetails | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
+
+  const greeting = new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening';
+
+  const studentEvents: EventDetails[] = events.map((event) => ({
+    title: event.title,
+    description: event.description || event.location,
+    color: 'primary',
+    icon: <Calendar className="w-10 h-10 text-primary" strokeWidth={1.5} />,
+    requirements: [
+      `Date: ${event.date}`,
+      `Location: ${event.location}`,
+      'Tap apply to submit your documents'
+    ]
+  }));
+
+  const handleDragEnd = (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    const threshold = 50;
+    if (screen === 0 && info.offset.x > threshold) {
+      setDirection(1);
+      onScreenChange(1);
+    } else if (screen === 1 && info.offset.x < -threshold) {
+      setDirection(-1);
+      onScreenChange(0);
+    }
+  };
+
+  return (
+    <div className="relative min-h-[100dvh] w-screen overflow-hidden bg-background">
+      <AnimatePresence initial={false} custom={direction}>
+        {screen === 0 ? (
+          <motion.div
+            key="student-dashboard"
+            initial={{ x: direction === -1 ? '-100%' : 0 }}
+            animate={{ x: 0 }}
+            exit={{ x: direction === 1 ? '-100%' : 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.2}
+            onDragEnd={handleDragEnd}
+            className="absolute inset-0"
+          >
+            <div className="relative h-full min-h-[100dvh] overflow-y-auto">
+              <div className="px-6 pt-16 pb-24">
+                <div className="flex items-center justify-between mb-8">
+                  <div>
+                    <h1 className="text-4xl tracking-tight" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif', fontWeight: 600, letterSpacing: '-0.02em' }}>
+                      {greeting},
+                    </h1>
+                    <h1 className="text-4xl tracking-tight" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif', fontWeight: 600, letterSpacing: '-0.02em' }}>
+                      {user?.name || 'Student'}
+                    </h1>
+                  </div>
+                  <button onClick={() => setShowProfile(true)} className="relative flex-shrink-0 group" style={{ width: '64px', height: '64px' }}>
+                    <div className="absolute inset-0 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(141, 212, 195, 0.15), rgba(255,184,148,0.08))' }}>
+                      <User className="w-8 h-8 text-primary/90" strokeWidth={1.5} />
+                    </div>
+                    <div className="absolute inset-0 rounded-full border-2 border-primary/30 group-hover:border-primary/50 transition-colors" style={{ pointerEvents: 'none' }} />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {studentEvents.map((event) => (
+                    <EventCard
+                      key={event.title}
+                      icon={event.icon}
+                      title={event.title}
+                      description={event.description}
+                      color={event.color}
+                      onClick={() => setSelectedEvent(event)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="student-attended"
+            initial={{ x: direction === 1 ? '100%' : 0 }}
+            animate={{ x: 0 }}
+            exit={{ x: direction === -1 ? '100%' : 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.2}
+            onDragEnd={handleDragEnd}
+            className="absolute inset-0"
+          >
+            <div className="relative h-full min-h-[100dvh] overflow-y-auto bg-background">
+              <div className="px-6 pt-16 pb-24">
+                <button onClick={() => onScreenChange(0)} className="flex items-center gap-2 mb-6 group">
+                  <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+                  <span style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif', fontSize: '16px' }}>Back</span>
+                </button>
+                <h1 className="text-4xl tracking-tight mb-2" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif', fontWeight: 600, letterSpacing: '-0.02em' }}>
+                  Events Attended
+                </h1>
+                <p className="text-muted-foreground mb-8" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif' }}>
+                  Your participation history
+                </p>
+                <div className="space-y-4">
+                  {seedAttendedEvents.map((event, index) => (
+                    <motion.div key={index} whileHover={{ scale: 1.01, y: -2 }} className="relative overflow-hidden" style={{ borderRadius: '24px' }}>
+                      <div className="absolute inset-0 backdrop-blur-xl" style={{ background: 'linear-gradient(135deg, rgba(168, 213, 226, 0.15) 0%, rgba(168, 213, 226, 0.05) 100%)', border: '1px solid rgba(255, 255, 255, 0.3)' }} />
+                      <div className="relative p-6 flex items-center gap-5">
+                        <div className="flex-shrink-0 w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(168, 213, 226, 0.2)' }}>
+                          <CheckCheck className="w-10 h-10 text-accent" strokeWidth={1.5} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-xl mb-1" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif', fontWeight: 600, color: '#1a1a1a' }}>{event.title}</h3>
+                          <p className="text-sm opacity-70 mb-1" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif', color: '#1a1a1a' }}>{event.type}</p>
+                          <p className="text-xs opacity-50" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif', color: '#1a1a1a' }}>{event.date}</p>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <EventModal
+        event={selectedEvent}
+        onClose={() => setSelectedEvent(null)}
+        onApply={() => {
+          setApplicationEvent(selectedEvent);
+          setShowApplication(true);
+          setSelectedEvent(null);
+        }}
+      />
+
+      <AnimatePresence>
+        {showApplication && applicationEvent && (
+          <ApplicationScreen
+            event={applicationEvent}
+            onClose={() => {
+              setShowApplication(false);
+              setApplicationEvent(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      <ProfileModal
+        isOpen={showProfile}
+        onClose={() => setShowProfile(false)}
+        onLogout={onLogout}
+        user={user}
+        role="student"
+      />
+    </div>
+  );
+}
+
+interface OrganizerHomeScreenProps {
+  user: SavedUser | null;
+  screen: number;
+  onScreenChange: (screen: number) => void;
+  events: PublishedEvent[];
+  onEventsChange: (events: PublishedEvent[]) => void;
+  onLogout: () => void;
+}
+
+function OrganizerHomeScreen({ user, screen, onScreenChange, events, onEventsChange, onLogout }: OrganizerHomeScreenProps) {
+  const [direction, setDirection] = useState(0);
+  const [showUploadForm, setShowUploadForm] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [selectedEventId, setSelectedEventId] = useState<number>(events[0]?.id ?? 0);
+
+  const handleDragEnd = (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    const threshold = 50;
+    if (screen === 0 && info.offset.x > threshold) {
+      setDirection(1);
+      onScreenChange(1);
+    } else if (screen === 1 && info.offset.x < -threshold) {
+      setDirection(-1);
+      onScreenChange(0);
+    }
+  };
+
+  const updateEvent = (eventId: number, updater: (event: PublishedEvent) => PublishedEvent) => {
+    onEventsChange(events.map((event) => (event.id === eventId ? updater(event) : event)));
+  };
+
+  const activeEvent = events.find((event) => event.id === selectedEventId) || events[0] || null;
+  const activeEventReadyForAttendance = activeEvent ? activeEvent.applicants.every((applicant) => applicant.status !== 'pending') : false;
+
+  return (
+    <div className="relative min-h-[100dvh] w-screen overflow-hidden bg-background">
+      <AnimatePresence initial={false} custom={direction}>
+        {screen === 0 ? (
+          <motion.div
+            key="organizer-home"
+            initial={{ x: direction === -1 ? '-100%' : 0 }}
+            animate={{ x: 0 }}
+            exit={{ x: direction === 1 ? '-100%' : 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.2}
+            onDragEnd={handleDragEnd}
+            className="absolute inset-0"
+          >
+            <div className="relative h-full min-h-[100dvh] overflow-y-auto">
+              <div className="px-6 pt-16 pb-24">
+                <div className="flex items-center justify-between mb-8">
+                  <div>
+                    <h1 className="text-4xl tracking-tight" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif', fontWeight: 600, letterSpacing: '-0.02em' }}>
+                      Event Manager
+                    </h1>
+                    <p className="text-muted-foreground mt-1" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif' }}>
+                      {user?.name || 'Organizer Dashboard'}
+                    </p>
+                  </div>
+                  <button onClick={() => setShowProfile(true)} className="relative flex-shrink-0 group" style={{ width: '64px', height: '64px' }}>
+                    <div className="absolute inset-0 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #ffb894 0%, #ff9a6c 100%)' }}>
+                      <Users className="w-8 h-8 text-white" strokeWidth={2} />
+                    </div>
+                    <div className="absolute inset-0 rounded-full border-2 border-secondary/30 group-hover:border-secondary/50 transition-colors" style={{ pointerEvents: 'none' }} />
+                  </button>
+                </div>
+
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setShowUploadForm(true)}
+                  className="w-full p-6 rounded-3xl mb-8"
+                  style={{ background: 'linear-gradient(135deg, rgba(255, 184, 148, 0.15) 0%, rgba(255, 184, 148, 0.05) 100%)', border: '2px dashed rgba(255, 184, 148, 0.4)' }}
+                >
+                  <Plus className="w-12 h-12 mx-auto mb-3 text-secondary" strokeWidth={1.5} />
+                  <h3 className="text-xl" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif', fontWeight: 600 }}>Upload New Event</h3>
+                  <p className="text-sm text-muted-foreground mt-1" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif' }}>Create and publish a new event</p>
+                </motion.button>
+
+                <div>
+                  <h2 className="text-xl mb-4" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif', fontWeight: 600 }}>Events You Uploaded</h2>
+                  <div className="space-y-3">
+                    {events.length === 0 ? (
+                      <div className="p-5 rounded-2xl border border-dashed border-secondary/40 text-sm text-muted-foreground">No published events yet. Upload your first event.</div>
+                    ) : (
+                      events.map((event) => (
+                        <motion.div key={event.id} whileHover={{ scale: 1.01, y: -2 }} className="relative overflow-hidden" style={{ borderRadius: '24px' }}>
+                          <div className="absolute inset-0 backdrop-blur-xl" style={{ background: 'linear-gradient(135deg, rgba(255, 184, 148, 0.15) 0%, rgba(255, 184, 148, 0.05) 100%)', border: '1px solid rgba(255, 255, 255, 0.3)' }} />
+                          <button className="relative p-5 w-full text-left" onClick={() => { setDirection(1); onScreenChange(1); setSelectedEventId(event.id); }}>
+                            <h3 className="text-lg mb-2" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif', fontWeight: 600 }}>{event.title}</h3>
+                            <div className="space-y-1.5">
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground"><Calendar className="w-4 h-4" strokeWidth={2} /><span style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif' }}>{event.date}</span></div>
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground"><MapPin className="w-4 h-4" strokeWidth={2} /><span style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif' }}>{event.location}</span></div>
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground"><Users className="w-4 h-4" strokeWidth={2} /><span style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif' }}>{event.attendees} attendees</span></div>
+                            </div>
+                          </button>
+                        </motion.div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="organizer-active"
+            initial={{ x: direction === 1 ? '100%' : 0 }}
+            animate={{ x: 0 }}
+            exit={{ x: direction === -1 ? '100%' : 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.2}
+            onDragEnd={handleDragEnd}
+            className="absolute inset-0"
+          >
+            <div className="relative h-full min-h-[100dvh] overflow-y-auto bg-background">
+              <div className="px-6 pt-16 pb-24">
+                <button onClick={() => onScreenChange(0)} className="flex items-center gap-2 mb-6 group">
+                  <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+                  <span style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif', fontSize: '16px' }}>Back</span>
+                </button>
+
+                <h1 className="text-3xl mb-2" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif', fontWeight: 700, letterSpacing: '-0.02em' }}>
+                  Active Event
+                </h1>
+                <p className="text-muted-foreground mb-6" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif' }}>
+                  Swipe left to return to your uploads.
+                </p>
+
+                <div className="space-y-3 mb-8">
+                  {events.map((event) => (
+                    <motion.div key={event.id} whileHover={{ scale: 1.01, y: -2 }} onClick={() => setSelectedEventId(event.id)} className="relative overflow-hidden cursor-pointer" style={{ borderRadius: '24px' }}>
+                      <div className="absolute inset-0 backdrop-blur-xl" style={{ background: 'linear-gradient(135deg, rgba(255, 184, 148, 0.15) 0%, rgba(255, 184, 148, 0.05) 100%)', border: '1px solid rgba(255, 255, 255, 0.3)' }} />
+                      <div className="relative p-5">
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <h3 className="text-lg mb-1" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif', fontWeight: 600 }}>{event.title}</h3>
+                            <p className="text-sm text-muted-foreground" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif' }}>{event.date} · {event.location}</p>
+                          </div>
+                          <ChevronRight className="w-5 h-5 opacity-50" strokeWidth={2} />
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+
+                {activeEvent && (
+                  <div className="space-y-4">
+                    <h2 className="text-xl" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif', fontWeight: 600 }}>{activeEvent.title}</h2>
+                    <p className="text-sm text-muted-foreground">{activeEvent.description}</p>
+
+                    <div className="rounded-3xl p-5" style={{ background: 'rgba(255, 184, 148, 0.08)', border: '1px solid rgba(255, 184, 148, 0.18)' }}>
+                      <h3 className="text-lg mb-3" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif', fontWeight: 600 }}>Acceptance</h3>
+                      <div className="space-y-3">
+                        {activeEvent.applicants.map((applicant) => (
+                          <div key={applicant.id} className="rounded-2xl p-4 bg-white/70 border border-border/50">
+                            <div className="flex items-start justify-between gap-4">
+                              <div>
+                                <p className="font-semibold">{applicant.name}</p>
+                                <p className="text-xs text-muted-foreground">{applicant.studentNumber} · {applicant.major}</p>
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-medium ${applicant.status === 'accepted' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-800'}`}
+                                  onClick={() => updateEvent(activeEvent.id, (event) => ({ ...event, applicants: event.applicants.map((item) => item.id === applicant.id ? { ...item, status: 'accepted' } : item) }))}
+                                >
+                                  Accept
+                                </button>
+                                <button
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-medium ${applicant.status === 'rejected' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-800'}`}
+                                  onClick={() => updateEvent(activeEvent.id, (event) => ({ ...event, applicants: event.applicants.map((item) => item.id === applicant.id ? { ...item, status: 'rejected' } : item) }))}
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            </div>
+                            <p className="mt-2 text-xs uppercase tracking-wider text-muted-foreground">Status: {applicant.status}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {activeEventReadyForAttendance && (
+                      <div className="rounded-3xl p-5" style={{ background: 'rgba(141, 212, 195, 0.08)', border: '1px solid rgba(141, 212, 195, 0.2)' }}>
+                        <h3 className="text-lg mb-3" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif', fontWeight: 600 }}>Attendance Check</h3>
+                        <div className="space-y-3">
+                          {activeEvent.applicants.map((applicant) => (
+                            <label key={applicant.id} className="flex items-center justify-between gap-4 rounded-2xl bg-white/80 p-4 border border-border/50">
+                              <div>
+                                <p className="font-medium">{applicant.name}</p>
+                                <p className="text-xs text-muted-foreground">{applicant.studentNumber}</p>
+                              </div>
+                              <input
+                                type="checkbox"
+                                checked={applicant.attended}
+                                onChange={() => updateEvent(activeEvent.id, (event) => ({ ...event, applicants: event.applicants.map((item) => item.id === applicant.id ? { ...item, attended: !item.attended } : item) }))}
+                                className="h-5 w-5"
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <UploadEventModal
+        isOpen={showUploadForm}
+        onClose={() => setShowUploadForm(false)}
+        onPublish={(event) => {
+          onEventsChange([event, ...events]);
+          setSelectedEventId(event.id);
+        }}
+      />
+
+      <ProfileModal
+        isOpen={showProfile}
+        onClose={() => setShowProfile(false)}
+        onLogout={onLogout}
+        user={user}
+        role="organizer"
+      />
+    </div>
+  );
 }
 
 function AttendedEventsScreen() {
@@ -1016,6 +1432,8 @@ function ApplicationScreen({ event, onClose }: ApplicationScreenProps) {
     gpa: '',
     phone: ''
   });
+  const [commitmentLetterFile, setCommitmentLetterFile] = useState<File | null>(null);
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
 
   return (
     <motion.div
@@ -1159,16 +1577,46 @@ function ApplicationScreen({ event, onClose }: ApplicationScreenProps) {
 
           {/* Upload Cards */}
           <div className="space-y-3 pt-2">
-            <UploadCard
-              icon={<FileText className="w-6 h-6" strokeWidth={1.5} />}
-              title="Commitment Letter"
-              color={event.color}
-            />
-            <UploadCard
-              icon={<Upload className="w-6 h-6" strokeWidth={1.5} />}
-              title="Portfolio / Resume"
-              color={event.color}
-            />
+            <div className="w-full p-4 rounded-2xl border border-dashed border-border/50 bg-card">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: event.color === 'primary' ? 'rgba(141, 212, 195, 0.15)' : 'rgba(255, 184, 148, 0.15)', color: event.color === 'primary' ? '#8dd4c3' : '#ffb894' }}>
+                  <FileText className="w-6 h-6" strokeWidth={1.5} />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-sm" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif', fontWeight: 500 }}>Commitment Letter</p>
+                  <p className="text-xs text-muted-foreground" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif' }}>{commitmentLetterFile ? commitmentLetterFile.name : 'PDF, DOC, or DOCX'}</p>
+                </div>
+                <label className="cursor-pointer text-xs font-medium px-3 py-2 rounded-lg" style={{ background: 'rgba(141, 212, 195, 0.15)', color: '#1a1a1a' }}>
+                  Upload
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx"
+                    className="hidden"
+                    onChange={(e) => setCommitmentLetterFile(e.target.files?.[0] ?? null)}
+                  />
+                </label>
+              </div>
+            </div>
+            <div className="w-full p-4 rounded-2xl border border-dashed border-border/50 bg-card">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: event.color === 'primary' ? 'rgba(141, 212, 195, 0.15)' : 'rgba(255, 184, 148, 0.15)', color: event.color === 'primary' ? '#8dd4c3' : '#ffb894' }}>
+                  <Upload className="w-6 h-6" strokeWidth={1.5} />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-sm" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif', fontWeight: 500 }}>Portfolio / Resume</p>
+                  <p className="text-xs text-muted-foreground" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif' }}>{resumeFile ? resumeFile.name : 'PDF, DOC, DOCX, or image'}</p>
+                </div>
+                <label className="cursor-pointer text-xs font-medium px-3 py-2 rounded-lg" style={{ background: 'rgba(141, 212, 195, 0.15)', color: '#1a1a1a' }}>
+                  Upload
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                    className="hidden"
+                    onChange={(e) => setResumeFile(e.target.files?.[0] ?? null)}
+                  />
+                </label>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1248,36 +1696,16 @@ interface ProfileModalProps {
   isOpen: boolean;
   onClose: () => void;
   onLogout?: () => void;
+  user?: SavedUser | null;
+  role?: 'student' | 'organizer';
 }
 
-function ProfileModal({ isOpen, onClose, onLogout }: ProfileModalProps) {
-  const [profileImage, setProfileImage] = useState<string | null>(null);
-
+function ProfileModal({ isOpen, onClose, onLogout, user, role }: ProfileModalProps) {
   if (!isOpen) return null;
 
-  const profileData = {
-    name: "Ahmad Pratama",
-    studentNumber: "00000123456",
-    major: "Information Systems",
-    email: "ahmad.pratama@student.uc.ac.id"
-  };
-
   const handleLogout = () => {
-    if (onLogout) {
-      onLogout();
-    }
+    if (onLogout) onLogout();
     onClose();
-  };
-
-  const handleImageUpload = () => {
-    // Simulate image upload - in real app would use file input
-    const demoImages = [
-      "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080",
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080",
-      "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080"
-    ];
-    const randomImage = demoImages[Math.floor(Math.random() * demoImages.length)];
-    setProfileImage(randomImage);
   };
 
   return (
@@ -1288,230 +1716,74 @@ function ProfileModal({ isOpen, onClose, onLogout }: ProfileModalProps) {
         exit={{ opacity: 0, y: '100%' }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         className="absolute inset-0 z-50 overflow-y-auto"
-        style={{
-          background: 'linear-gradient(135deg, rgba(141, 212, 195, 0.98) 0%, rgba(141, 212, 195, 0.95) 100%)',
-        }}
+        style={{ background: 'linear-gradient(135deg, rgba(141, 212, 195, 0.98) 0%, rgba(141, 212, 195, 0.95) 100%)' }}
       >
-        {/* Content */}
         <div className="relative min-h-full px-6 pt-16 pb-8">
-          {/* Close Button */}
           <button
             onClick={onClose}
             className="absolute top-6 right-6 w-12 h-12 rounded-full backdrop-blur-xl flex items-center justify-center transition-transform hover:scale-110"
-            style={{
-              background: 'rgba(255, 255, 255, 0.25)',
-              border: '1px solid rgba(255, 255, 255, 0.4)'
-            }}
+            style={{ background: 'rgba(255, 255, 255, 0.25)', border: '1px solid rgba(255, 255, 255, 0.4)' }}
           >
             <X className="w-6 h-6 text-white" strokeWidth={2} />
           </button>
 
-          {/* Profile Image */}
           <div className="flex justify-center mb-6">
-            <div className="relative">
-              <div
-                className="rounded-full overflow-hidden flex items-center justify-center"
-                style={{
-                  width: '120px',
-                  height: '120px',
-                  border: '4px solid rgba(255, 255, 255, 0.4)',
-                  boxShadow: '0 12px 40px rgba(0, 0, 0, 0.15)',
-                  background: 'rgba(255,255,255,0.08)'
-                }}
-              >
-                {profileImage ? (
-                  <img
-                    src={profileImage}
-                    alt="Student profile"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="flex items-center justify-center w-full h-full text-white/90">
-                    <User className="w-12 h-12" strokeWidth={1.5} />
-                  </div>
-                )}
-              </div>
-
-              {/* Upload Photo Button */}
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={handleImageUpload}
-                className="absolute bottom-0 right-0 w-10 h-10 rounded-full flex items-center justify-center"
-                style={{
-                  background: 'rgba(255, 255, 255, 0.9)',
-                  border: '2px solid rgba(141, 212, 195, 0.5)',
-                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
-                }}
-              >
-                <Camera className="w-5 h-5 text-primary" strokeWidth={2} />
-              </motion.button>
+            <div className="w-28 h-28 rounded-full flex items-center justify-center" style={{ border: '4px solid rgba(255, 255, 255, 0.4)', boxShadow: '0 12px 40px rgba(0, 0, 0, 0.15)', background: 'rgba(255,255,255,0.08)' }}>
+              <User className="w-12 h-12 text-white/90" strokeWidth={1.5} />
             </div>
           </div>
 
-          {/* Profile Title */}
-          <h2
-            className="text-4xl mb-10 text-white text-center"
-            style={{
-              fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif',
-              fontWeight: 700,
-              letterSpacing: '-0.02em'
-            }}
-          >
+          <h2 className="text-4xl mb-10 text-white text-center" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif', fontWeight: 700, letterSpacing: '-0.02em' }}>
             Profile
           </h2>
 
-          {/* Profile Info Cards */}
           <div className="space-y-4">
-            {/* Name */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="p-5 rounded-2xl"
-              style={{
-                background: 'rgba(255, 255, 255, 0.2)',
-                border: '1px solid rgba(255, 255, 255, 0.3)'
-              }}
-            >
+            <div className="p-5 rounded-2xl" style={{ background: 'rgba(255, 255, 255, 0.2)', border: '1px solid rgba(255, 255, 255, 0.3)' }}>
               <div className="flex items-center gap-4">
-                <div
-                  className="w-12 h-12 rounded-xl flex items-center justify-center"
-                  style={{ background: 'rgba(255, 255, 255, 0.25)' }}
-                >
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255, 255, 255, 0.25)' }}>
                   <User className="w-6 h-6 text-white" strokeWidth={2} />
                 </div>
                 <div className="flex-1">
-                  <p
-                    className="text-xs text-white/70 mb-1"
-                    style={{
-                      fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em'
-                    }}
-                  >
+                  <p className="text-xs text-white/70 mb-1" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Full Name
                   </p>
-                  <p
-                    className="text-lg text-white"
-                    style={{
-                      fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif',
-                      fontWeight: 600
-                    }}
-                  >
-                    {profileData.name}
+                  <p className="text-lg text-white" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif', fontWeight: 600 }}>
+                    {user?.name || (role === 'student' ? 'Student' : 'Organizer')}
                   </p>
                 </div>
               </div>
-            </motion.div>
+            </div>
 
-            {/* Student Number */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 }}
-              className="p-5 rounded-2xl"
-              style={{
-                background: 'rgba(255, 255, 255, 0.2)',
-                border: '1px solid rgba(255, 255, 255, 0.3)'
-              }}
-            >
-              <div className="flex items-center gap-4">
-                <div
-                  className="w-12 h-12 rounded-xl flex items-center justify-center"
-                  style={{ background: 'rgba(255, 255, 255, 0.25)' }}
-                >
-                  <Hash className="w-6 h-6 text-white" strokeWidth={2} />
+            {role === 'student' && (
+              <>
+                <div className="p-5 rounded-2xl" style={{ background: 'rgba(255, 255, 255, 0.2)', border: '1px solid rgba(255, 255, 255, 0.3)' }}>
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255, 255, 255, 0.25)' }}>
+                      <Hash className="w-6 h-6 text-white" strokeWidth={2} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs text-white/70 mb-1" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Student Number</p>
+                      <p className="text-lg text-white" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif', fontWeight: 600, letterSpacing: '0.05em' }}>{user?.studentNumber || '-'}</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <p
-                    className="text-xs text-white/70 mb-1"
-                    style={{
-                      fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em'
-                    }}
-                  >
-                    Student Number
-                  </p>
-                  <p
-                    className="text-lg text-white"
-                    style={{
-                      fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif',
-                      fontWeight: 600,
-                      letterSpacing: '0.05em'
-                    }}
-                  >
-                    {profileData.studentNumber}
-                  </p>
+                <div className="p-5 rounded-2xl" style={{ background: 'rgba(255, 255, 255, 0.2)', border: '1px solid rgba(255, 255, 255, 0.3)' }}>
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255, 255, 255, 0.25)' }}>
+                      <GraduationCap className="w-6 h-6 text-white" strokeWidth={2} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs text-white/70 mb-1" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Major</p>
+                      <p className="text-lg text-white" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif', fontWeight: 600 }}>{user?.major || '-'}</p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </motion.div>
-
-            {/* Major */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="p-5 rounded-2xl"
-              style={{
-                background: 'rgba(255, 255, 255, 0.2)',
-                border: '1px solid rgba(255, 255, 255, 0.3)'
-              }}
-            >
-              <div className="flex items-center gap-4">
-                <div
-                  className="w-12 h-12 rounded-xl flex items-center justify-center"
-                  style={{ background: 'rgba(255, 255, 255, 0.25)' }}
-                >
-                  <GraduationCap className="w-6 h-6 text-white" strokeWidth={2} />
-                </div>
-                <div className="flex-1">
-                  <p
-                    className="text-xs text-white/70 mb-1"
-                    style={{
-                      fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em'
-                    }}
-                  >
-                    Major
-                  </p>
-                  <p
-                    className="text-lg text-white"
-                    style={{
-                      fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif',
-                      fontWeight: 600
-                    }}
-                  >
-                    {profileData.major}
-                  </p>
-                </div>
-              </div>
-            </motion.div>
+              </>
+            )}
           </div>
 
-          {/* Logout Button */}
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={handleLogout}
-            className="w-full py-4 rounded-2xl mt-8"
-            style={{
-              background: 'rgba(255, 255, 255, 0.3)',
-              border: '1px solid rgba(255, 255, 255, 0.5)'
-            }}
-          >
-            <span
-              className="text-white"
-              style={{
-                fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif',
-                fontWeight: 600,
-                fontSize: '17px'
-              }}
-            >
-              Logout
-            </span>
+          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={handleLogout} className="w-full py-4 rounded-2xl mt-8" style={{ background: 'rgba(255, 255, 255, 0.3)', border: '1px solid rgba(255, 255, 255, 0.5)' }}>
+            <span className="text-white" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", system-ui, sans-serif', fontWeight: 600, fontSize: '17px' }}>Logout</span>
           </motion.button>
         </div>
       </motion.div>
@@ -1526,12 +1798,13 @@ interface OrganizerMainScreenProps {
 function OrganizerMainScreen({ onLogout }: OrganizerMainScreenProps) {
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const [uploadedEvents, setUploadedEvents] = useState([
+  const [uploadedEvents, setUploadedEvents] = useState<UploadedEvent[]>([
     {
       id: 1,
       title: "Tech Career Fair 2026",
       date: "March 15, 2026",
       location: "Main Hall",
+      description: '',
       attendees: 45
     },
     {
@@ -1539,6 +1812,7 @@ function OrganizerMainScreen({ onLogout }: OrganizerMainScreenProps) {
       title: "Startup Networking Event",
       date: "April 10, 2026",
       location: "Innovation Center",
+      description: '',
       attendees: 32
     }
   ]);
@@ -1706,9 +1980,10 @@ function OrganizerMainScreen({ onLogout }: OrganizerMainScreenProps) {
 interface UploadEventModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onPublish?: (event: PublishedEvent) => void;
 }
 
-function UploadEventModal({ isOpen, onClose }: UploadEventModalProps) {
+function UploadEventModal({ isOpen, onClose, onPublish }: UploadEventModalProps) {
   const [formData, setFormData] = useState({
     title: '',
     date: '',
@@ -1811,7 +2086,18 @@ function UploadEventModal({ isOpen, onClose }: UploadEventModalProps) {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => {
-              // Handle upload
+              if (!formData.title.trim()) return;
+
+              onPublish?.({
+                id: Date.now(),
+                title: formData.title.trim(),
+                date: formData.date || 'TBA',
+                location: formData.location.trim() || 'TBA',
+                description: formData.description.trim(),
+                attendees: 0,
+                applicants: []
+              });
+              setFormData({ title: '', date: '', location: '', description: '' });
               onClose();
             }}
             className="w-full py-4 rounded-2xl mt-8 text-white"
