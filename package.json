@@ -1,4 +1,13 @@
 {
+  "name": "ucef-mobile-shell",
+  "private": true,
+  "scripts": {
+    "dev": "cd UCEF && npm run dev",
+    "build": "cd UCEF && npm run build",
+    "cap:sync": "npx cap sync",
+    "cap:android": "npx cap open android",
+    "cap:ios": "npx cap open ios"
+  },
   "dependencies": {
     "@capacitor/android": "^8.4.0",
     "@capacitor/core": "^8.4.0",

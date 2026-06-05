@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, useMotionValue, useTransform, PanInfo, AnimatePresence } from 'motion/react';
 import { Calendar, Users, ChevronRight, Camera, X, CheckCircle2, ArrowLeft, Upload, FileText, CheckCheck, User, GraduationCap, Hash, Eye, EyeOff, Mail, Lock, Plus, QrCode, MapPin, Clock, Image, AlertCircle, TrendingDown } from 'lucide-react';
+import YourEvents from '../YourEvents';
 
 type UserRole = 'student' | 'organizer' | null;
 
@@ -11,9 +12,15 @@ export default function App() {
   const [direction, setDirection] = useState(0);
   const screenWidth = 393;
 
-  const handleLogin = (role: UserRole) => {
+  const handleLogin = (role: UserRole, user?: any) => {
     setUserRole(role);
     setIsLoggedIn(true);
+    // persist current user
+    if (user) {
+      try { localStorage.setItem('UCEF_currentUser', JSON.stringify(user)); } catch {}
+    } else {
+      try { localStorage.setItem('UCEF_currentUser', JSON.stringify({ role })); } catch {}
+    }
     // Set initial screen based on role
     if (role === 'organizer') {
       setCurrentScreen(0); // Organizer starts at main screen
@@ -26,7 +33,22 @@ export default function App() {
     setIsLoggedIn(false);
     setUserRole(null);
     setCurrentScreen(0);
+    try { localStorage.removeItem('UCEF_currentUser'); } catch {}
   };
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('UCEF_currentUser');
+      if (stored) {
+        const user = JSON.parse(stored);
+        if (user && user.role) {
+          setUserRole(user.role);
+          setIsLoggedIn(true);
+          setCurrentScreen(user.role === 'organizer' ? 0 : 1);
+        }
+      }
+    } catch {}
+  }, []);
 
   const handleDragEnd = (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     const threshold = 50;
@@ -149,7 +171,7 @@ export default function App() {
                   onDragEnd={handleDragEnd}
                   className="absolute inset-0"
                 >
-                  <AttendanceListScreen />
+                  <YourEvents />
                 </motion.div>
               )}
             </AnimatePresence>
@@ -252,7 +274,7 @@ export default function App() {
 }
 
 interface AuthScreenProps {
-  onLogin: (role: UserRole) => void;
+  onLogin: (role: UserRole, user?: any) => void;
 }
 
 function AuthScreen({ onLogin }: AuthScreenProps) {
@@ -267,8 +289,38 @@ function AuthScreen({ onLogin }: AuthScreenProps) {
   });
 
   const handleSubmit = () => {
-    // In a real app, you would validate credentials here
-    onLogin(selectedRole);
+    const users = JSON.parse(localStorage.getItem('UCEF_users') || '[]');
+    if (isLogin) {
+      const found = users.find((u: any) => u.email === formData.email && u.password === formData.password && u.role === selectedRole);
+      if (found) {
+        localStorage.setItem('UCEF_currentUser', JSON.stringify(found));
+        onLogin(selectedRole, found);
+      } else {
+        alert('Invalid credentials for selected role');
+      }
+    } else {
+      // register
+      if (!formData.email || !formData.password || !formData.name) {
+        alert('Please fill required fields');
+        return;
+      }
+      const exists = users.find((u: any) => u.email === formData.email);
+      if (exists) {
+        alert('User with this email already exists');
+        return;
+      }
+      const newUser = {
+        email: formData.email,
+        password: formData.password,
+        name: formData.name,
+        studentNumber: formData.studentNumber || '',
+        role: selectedRole
+      };
+      users.push(newUser);
+      localStorage.setItem('UCEF_users', JSON.stringify(users));
+      localStorage.setItem('UCEF_currentUser', JSON.stringify(newUser));
+      onLogin(selectedRole, newUser);
+    }
   };
 
   return (
@@ -730,13 +782,9 @@ function DashboardScreen({ onCameraClick, onLogout }: DashboardScreenProps) {
           className="relative flex-shrink-0 group"
           style={{ width: '64px', height: '64px' }}
         >
-          <div className="absolute inset-0 rounded-full overflow-hidden">
-            <img
-              src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjB5b3VuZyUyMHBlcnNvbiUyMHBvcnRyYWl0JTIwaGVhZHNob3R8ZW58MXx8fHwxNzgwMDMyMjk5fDA&ixlib=rb-4.1.0&q=80&w=1080"
-              alt="Student profile"
-              className="w-full h-full object-cover"
-              style={{ aspectRatio: '1/1' }}
-            />
+          <div className="absolute inset-0 rounded-full flex items-center justify-center"
+            style={{ background: 'linear-gradient(135deg, rgba(141, 212, 195, 0.15), rgba(255,184,148,0.08))' }}>
+            <User className="w-8 h-8 text-primary/90" strokeWidth={1.5} />
           </div>
           <div
             className="absolute inset-0 rounded-full border-2 border-primary/30 group-hover:border-primary/50 transition-colors"
@@ -1283,7 +1331,7 @@ interface ProfileModalProps {
 }
 
 function ProfileModal({ isOpen, onClose, onLogout }: ProfileModalProps) {
-  const [profileImage, setProfileImage] = useState<string>("https://images.unsplash.com/photo-1500648767791-00dcc994a43e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjB5b3VuZyUyMHBlcnNvbiUyMHBvcnRyYWl0JTIwaGVhZHNob3R8ZW58MXx8fHwxNzgwMDMyMjk5fDA&ixlib=rb-4.1.0&q=80&w=1080");
+  const [profileImage, setProfileImage] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -1342,19 +1390,26 @@ function ProfileModal({ isOpen, onClose, onLogout }: ProfileModalProps) {
           <div className="flex justify-center mb-6">
             <div className="relative">
               <div
-                className="rounded-full overflow-hidden"
+                className="rounded-full overflow-hidden flex items-center justify-center"
                 style={{
                   width: '120px',
                   height: '120px',
                   border: '4px solid rgba(255, 255, 255, 0.4)',
-                  boxShadow: '0 12px 40px rgba(0, 0, 0, 0.15)'
+                  boxShadow: '0 12px 40px rgba(0, 0, 0, 0.15)',
+                  background: 'rgba(255,255,255,0.08)'
                 }}
               >
-                <img
-                  src={profileImage}
-                  alt="Student profile"
-                  className="w-full h-full object-cover"
-                />
+                {profileImage ? (
+                  <img
+                    src={profileImage}
+                    alt="Student profile"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="flex items-center justify-center w-full h-full text-white/90">
+                    <User className="w-12 h-12" strokeWidth={1.5} />
+                  </div>
+                )}
               </div>
 
               {/* Upload Photo Button */}
