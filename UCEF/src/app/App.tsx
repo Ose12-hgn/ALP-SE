@@ -1,274 +1,165 @@
 import { useState, useEffect } from 'react';
-import { motion, useMotionValue, useTransform, PanInfo, AnimatePresence } from 'motion/react';
-import { Calendar, Users, ChevronRight, Camera, X, CheckCircle2, ArrowLeft, Upload, FileText, CheckCheck, User, GraduationCap, Hash, Eye, EyeOff, Mail, Lock, Plus, QrCode, MapPin, Clock, Image, AlertCircle, TrendingDown } from 'lucide-react';
-import YourEvents from '../YourEvents';
+import { motion, AnimatePresence, PanInfo } from 'motion/react';
+import { Calendar, Users, ChevronRight, Camera, X, CheckCircle2, ArrowLeft, Upload, FileText, CheckCheck, User, GraduationCap, Hash, Eye, EyeOff, Mail, Lock, Plus, QrCode, MapPin, AlertCircle, TrendingDown } from 'lucide-react';
 
 type UserRole = 'student' | 'organizer' | null;
+
+type SavedUser = {
+  role: UserRole;
+  email: string;
+  password: string;
+  name: string;
+  studentNumber?: string;
+  major?: string;
+};
+
+type PublishedEvent = {
+  id: number;
+  title: string;
+  date: string;
+  location: string;
+  description: string;
+  attendees: number;
+  applicants: Array<{
+    id: number;
+    name: string;
+    studentNumber: string;
+    major: string;
+    status: 'pending' | 'accepted' | 'rejected';
+    attended: boolean;
+  }>;
+};
+
+const USERS_KEY = 'UCEF_users';
+const CURRENT_USER_KEY = 'UCEF_currentUser';
+const EVENTS_KEY = 'UCEF_publishedEvents';
+
+const seedPublishedEvents: PublishedEvent[] = [
+  {
+    id: 1,
+    title: 'Tech Career Fair 2026',
+    date: 'March 15, 2026',
+    location: 'Main Hall',
+    description: 'Industry partners and student networking.',
+    attendees: 45,
+    applicants: [
+      { id: 1, name: 'Ahmad Pratama', studentNumber: '00000123456', major: 'Information Systems', status: 'pending', attended: false },
+      { id: 2, name: 'Siti Nurhaliza', studentNumber: '00000123457', major: 'Business', status: 'pending', attended: false },
+      { id: 3, name: 'Budi Santoso', studentNumber: '00000123458', major: 'Computer Science', status: 'pending', attended: false }
+    ]
+  }
+];
+
+const seedAttendedEvents = [
+  { title: 'SU IBM 24/25', date: 'December 15, 2024', type: 'Career Fair' },
+  { title: 'KOOR PCD OWEEK 25/26', date: 'August 20, 2025', type: 'Orientation Week' }
+];
+
+function loadSavedUsers(): SavedUser[] {
+  try {
+    const raw = localStorage.getItem(USERS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function loadPublishedEvents(): PublishedEvent[] {
+  try {
+    const raw = localStorage.getItem(EVENTS_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) && parsed.length ? parsed : seedPublishedEvents;
+  } catch {
+    return seedPublishedEvents;
+  }
+}
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userRole, setUserRole] = useState<UserRole>(null);
-  const [currentScreen, setCurrentScreen] = useState(0);
-  const [direction, setDirection] = useState(0);
-  const screenWidth = 393;
+  const [currentUser, setCurrentUser] = useState<SavedUser | null>(null);
+  const [studentScreen, setStudentScreen] = useState(0);
+  const [organizerScreen, setOrganizerScreen] = useState(0);
+  const [publishedEvents, setPublishedEvents] = useState<PublishedEvent[]>([]);
 
   const handleLogin = (role: UserRole, user?: any) => {
     setUserRole(role);
     setIsLoggedIn(true);
+    if (user) {
+      setCurrentUser(user);
+    }
     // persist current user
     if (user) {
-      try { localStorage.setItem('UCEF_currentUser', JSON.stringify(user)); } catch {}
+      try { localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user)); } catch {}
     } else {
-      try { localStorage.setItem('UCEF_currentUser', JSON.stringify({ role })); } catch {}
-    }
-    // Set initial screen based on role
-    if (role === 'organizer') {
-      setCurrentScreen(0); // Organizer starts at main screen
-    } else {
-      setCurrentScreen(1); // Student starts at dashboard (middle screen)
+      try { localStorage.setItem(CURRENT_USER_KEY, JSON.stringify({ role })); } catch {}
     }
   };
 
   const handleLogout = () => {
     setIsLoggedIn(false);
     setUserRole(null);
-    setCurrentScreen(0);
-    try { localStorage.removeItem('UCEF_currentUser'); } catch {}
+    setCurrentUser(null);
+    setStudentScreen(0);
+    setOrganizerScreen(0);
+    try { localStorage.removeItem(CURRENT_USER_KEY); } catch {}
   };
 
   useEffect(() => {
+    setPublishedEvents(loadPublishedEvents());
+  }, []);
+
+  useEffect(() => {
+    try { localStorage.setItem(EVENTS_KEY, JSON.stringify(publishedEvents)); } catch {}
+  }, [publishedEvents]);
+
+  useEffect(() => {
     try {
-      const stored = localStorage.getItem('UCEF_currentUser');
+      const stored = localStorage.getItem(CURRENT_USER_KEY);
       if (stored) {
         const user = JSON.parse(stored);
         if (user && user.role) {
           setUserRole(user.role);
           setIsLoggedIn(true);
-          setCurrentScreen(user.role === 'organizer' ? 0 : 1);
+          setCurrentUser(user);
         }
       }
     } catch {}
   }, []);
 
-  const handleDragEnd = (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    const threshold = 50;
-
-    if (userRole === 'organizer') {
-      // Organizer screens: 0 = Main, 1 = Attendance List
-      // On main screen (0): swipe left to attendance list
-      if (currentScreen === 0 && info.offset.x < -threshold) {
-        setDirection(1);
-        setCurrentScreen(1);
-      }
-      // On attendance list (1): swipe right to main screen
-      else if (currentScreen === 1 && info.offset.x > threshold) {
-        setDirection(-1);
-        setCurrentScreen(0);
-      }
-    } else {
-      // Student screens: 0 = Attended Events, 1 = Dashboard, 2 = Camera
-      // On attended events (screen 0): swipe left to go to dashboard
-      if (currentScreen === 0 && info.offset.x < -threshold) {
-        setDirection(1);
-        setCurrentScreen(1);
-      }
-      // On dashboard (screen 1): swipe left to camera OR swipe right to attended events
-      else if (currentScreen === 1 && info.offset.x < -threshold) {
-        setDirection(1);
-        setCurrentScreen(2);
-      }
-      else if (currentScreen === 1 && info.offset.x > threshold) {
-        setDirection(-1);
-        setCurrentScreen(0);
-      }
-      // On camera (screen 2): swipe right to go back to dashboard
-      else if (currentScreen === 2 && info.offset.x > threshold) {
-        setDirection(-1);
-        setCurrentScreen(1);
-      }
-    }
-  };
-
-  const navigateToCamera = () => {
-    setDirection(1);
-    setCurrentScreen(2);
-  };
-
-  const navigateToDashboard = () => {
-    setDirection(-1);
-    setCurrentScreen(1);
-  };
-
   if (!isLoggedIn) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-zinc-100 p-4">
-        <div
-          className="relative overflow-hidden bg-background shadow-2xl"
-          style={{
-            width: '393px',
-            height: '852px',
-            borderRadius: '60px',
-            border: '12px solid #1a1a1a'
-          }}
-        >
-          <AuthScreen onLogin={handleLogin} />
-        </div>
+      <div className="min-h-[100dvh] bg-background overflow-hidden">
+        <AuthScreen onLogin={handleLogin} />
       </div>
     );
   }
 
-  // Render different UI based on role
   if (userRole === 'organizer') {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-zinc-100 p-4">
-        <div
-          className="relative overflow-hidden bg-background shadow-2xl"
-          style={{
-            width: '393px',
-            height: '852px',
-            borderRadius: '60px',
-            border: '12px solid #1a1a1a'
-          }}
-        >
-          {/* Dynamic Island */}
-          <div
-            className="absolute top-0 left-1/2 -translate-x-1/2 z-50 bg-black"
-            style={{
-              width: '126px',
-              height: '37px',
-              borderRadius: '0 0 20px 20px'
-            }}
-          />
-
-          {/* Organizer Screens */}
-          <div className="relative h-full w-full overflow-hidden">
-            <AnimatePresence initial={false} custom={direction}>
-              {currentScreen === 0 ? (
-                <motion.div
-                  key="organizer-main"
-                  initial={{ x: direction === -1 ? -screenWidth : 0 }}
-                  animate={{ x: 0 }}
-                  exit={{ x: direction === 1 ? -screenWidth : 0 }}
-                  transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                  drag="x"
-                  dragConstraints={{ left: 0, right: 0 }}
-                  dragElastic={0.2}
-                  onDragEnd={handleDragEnd}
-                  className="absolute inset-0"
-                >
-                  <OrganizerMainScreen onLogout={handleLogout} />
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="attendance-list"
-                  initial={{ x: direction === 1 ? screenWidth : 0 }}
-                  animate={{ x: 0 }}
-                  exit={{ x: direction === -1 ? screenWidth : 0 }}
-                  transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                  drag="x"
-                  dragConstraints={{ left: 0, right: 0 }}
-                  dragElastic={0.2}
-                  onDragEnd={handleDragEnd}
-                  className="absolute inset-0"
-                >
-                  <YourEvents />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          {/* Screen Indicator Dots */}
-          <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-2 z-40">
-            <div className={`h-1.5 rounded-full transition-all ${currentScreen === 0 ? 'w-8 bg-secondary' : 'w-1.5 bg-gray-300'}`} />
-            <div className={`h-1.5 rounded-full transition-all ${currentScreen === 1 ? 'w-8 bg-secondary' : 'w-1.5 bg-gray-300'}`} />
-          </div>
-        </div>
+      <div className="min-h-[100dvh] bg-background overflow-hidden">
+        <OrganizerHomeScreen
+          user={currentUser}
+          screen={organizerScreen}
+          onScreenChange={setOrganizerScreen}
+          events={publishedEvents}
+          onEventsChange={setPublishedEvents}
+          onLogout={handleLogout}
+        />
       </div>
     );
   }
 
-  // Student UI (existing)
   return (
-    <div className="flex items-center justify-center min-h-screen bg-zinc-100 p-4">
-      {/* iOS Device Frame */}
-      <div
-        className="relative overflow-hidden bg-background shadow-2xl"
-        style={{
-          width: '393px',
-          height: '852px',
-          borderRadius: '60px',
-          border: '12px solid #1a1a1a'
-        }}
-      >
-        {/* Dynamic Island */}
-        <div
-          className="absolute top-0 left-1/2 -translate-x-1/2 z-50 bg-black"
-          style={{
-            width: '126px',
-            height: '37px',
-            borderRadius: '0 0 20px 20px'
-          }}
-        />
-
-        {/* Screens Container */}
-        <div className="relative h-full w-full overflow-hidden">
-          <AnimatePresence initial={false} custom={direction}>
-            {currentScreen === 0 ? (
-              <motion.div
-                key="attended"
-                initial={{ x: direction === -1 ? -screenWidth : 0 }}
-                animate={{ x: 0 }}
-                exit={{ x: direction === 1 ? -screenWidth : 0 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                drag="x"
-                dragConstraints={{ left: 0, right: 0 }}
-                dragElastic={0.2}
-                onDragEnd={handleDragEnd}
-                className="absolute inset-0"
-              >
-                <AttendedEventsScreen />
-              </motion.div>
-            ) : currentScreen === 1 ? (
-              <motion.div
-                key="dashboard"
-                initial={{ x: direction === 1 ? screenWidth : direction === -1 ? -screenWidth : 0 }}
-                animate={{ x: 0 }}
-                exit={{ x: direction === 1 ? -screenWidth : direction === -1 ? screenWidth : 0 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                drag="x"
-                dragConstraints={{ left: 0, right: 0 }}
-                dragElastic={0.2}
-                onDragEnd={handleDragEnd}
-                className="absolute inset-0"
-              >
-                <DashboardScreen onCameraClick={navigateToCamera} onLogout={handleLogout} />
-              </motion.div>
-            ) : (
-              <motion.div
-                key="camera"
-                initial={{ x: direction === 1 ? screenWidth : 0 }}
-                animate={{ x: 0 }}
-                exit={{ x: direction === -1 ? screenWidth : 0 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                drag="x"
-                dragConstraints={{ left: 0, right: 0 }}
-                dragElastic={0.2}
-                onDragEnd={handleDragEnd}
-                className="absolute inset-0"
-              >
-                <CameraScreen onBack={navigateToDashboard} />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Screen Indicator Dots */}
-        <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-2 z-40">
-          <div className={`h-1.5 rounded-full transition-all ${currentScreen === 0 ? 'w-8 bg-primary' : 'w-1.5 bg-gray-300'}`} />
-          <div className={`h-1.5 rounded-full transition-all ${currentScreen === 1 ? 'w-8 bg-primary' : 'w-1.5 bg-gray-300'}`} />
-          <div className={`h-1.5 rounded-full transition-all ${currentScreen === 2 ? 'w-8 bg-primary' : 'w-1.5 bg-gray-300'}`} />
-        </div>
-      </div>
+    <div className="min-h-[100dvh] bg-background overflow-hidden">
+      <StudentHomeScreen
+        user={currentUser}
+        screen={studentScreen}
+        onScreenChange={setStudentScreen}
+        events={publishedEvents}
+        onLogout={handleLogout}
+      />
     </div>
   );
 }
@@ -285,7 +176,8 @@ function AuthScreen({ onLogin }: AuthScreenProps) {
     email: '',
     password: '',
     name: '',
-    studentNumber: ''
+    studentNumber: '',
+    major: ''
   });
 
   const handleSubmit = () => {
@@ -314,6 +206,7 @@ function AuthScreen({ onLogin }: AuthScreenProps) {
         password: formData.password,
         name: formData.name,
         studentNumber: formData.studentNumber || '',
+        major: formData.major || '',
         role: selectedRole
       };
       users.push(newUser);
@@ -498,6 +391,33 @@ function AuthScreen({ onLogin }: AuthScreenProps) {
                   value={formData.studentNumber}
                   onChange={(e) => setFormData({ ...formData, studentNumber: e.target.value })}
                   placeholder="00000123456"
+                  className="w-full pl-12 pr-4 py-3 rounded-2xl border border-border/50 bg-card focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  style={{
+                    fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif'
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {!isLogin && (
+            <div>
+              <label
+                className="block mb-2 text-sm"
+                style={{
+                  fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif',
+                  fontWeight: 500
+                }}
+              >
+                Major
+              </label>
+              <div className="relative">
+                <GraduationCap className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" strokeWidth={2} />
+                <input
+                  type="text"
+                  value={formData.major}
+                  onChange={(e) => setFormData({ ...formData, major: e.target.value })}
+                  placeholder="Enter your major"
                   className="w-full pl-12 pr-4 py-3 rounded-2xl border border-border/50 bg-card focus:outline-none focus:ring-2 focus:ring-primary/30"
                   style={{
                     fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif'
